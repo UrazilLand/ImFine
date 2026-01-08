@@ -16,6 +16,7 @@ function TabBarIcon(props: {
  * ImFine 탭 레이아웃
  * 
  * - 피드: 메인 SNS 피드
+ * - 마음함: 사후 메시지 보관함
  * - 마이페이지: 프로필 및 설정
  */
 export default function TabLayout() {
@@ -48,6 +49,14 @@ export default function TabLayout() {
           title: '피드',
           headerTitle: 'ImFine',
           tabBarIcon: ({ color }) => <TabBarIcon name="home" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="heartbox"
+        options={{
+          title: '마음함',
+          headerTitle: '마음 보관함',
+          tabBarIcon: ({ color }) => <TabBarIcon name="heart" color={color} />,
         }}
       />
       <Tabs.Screen

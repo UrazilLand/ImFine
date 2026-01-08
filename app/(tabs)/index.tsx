@@ -1,12 +1,14 @@
 import MoodModal from '@/components/MoodModal';
 import PostCard from '@/components/PostCard';
+import PostDetailSheet from '@/components/PostDetailSheet';
 import { brand } from '@/constants/Colors';
 import { useAuthGuard } from '@/hooks/useAuthGuard';
 import { fetchPosts, Post, toggleLike } from '@/lib/feedService';
 import { checkTodayMood, saveMoodEntry } from '@/lib/moodService';
 import { FontAwesome } from '@expo/vector-icons';
+import BottomSheet from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -27,11 +29,12 @@ const COMFORT_MOODS = ['SAD', 'LONELY', 'ANXIOUS', 'TIRED'];
  * 
  * - Supabase 연동 피드
  * - 무한 스크롤
- * - 비로그인도 열람 가능
+ * - Bottom Sheet로 상세 보기
  */
 export default function FeedScreen() {
   const router = useRouter();
   const { requireAuth } = useAuthGuard();
+  const bottomSheetRef = useRef<BottomSheet>(null);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [refreshing, setRefreshing] = useState(false);
@@ -43,6 +46,9 @@ export default function FeedScreen() {
 
   const [showMoodModal, setShowMoodModal] = useState(false);
   const [todayMood, setTodayMood] = useState<string | undefined>();
+
+  // Bottom Sheet 상태
+  const [selectedPostId, setSelectedPostId] = useState<string | null>(null);
 
   // 초기 로딩
   useEffect(() => {
@@ -150,6 +156,16 @@ export default function FeedScreen() {
     ));
   };
 
+  // 게시물 클릭 → Bottom Sheet 열기
+  const handlePostPress = (postId: string) => {
+    setSelectedPostId(postId);
+    bottomSheetRef.current?.expand();
+  };
+
+  const handleSheetClose = () => {
+    setSelectedPostId(null);
+  };
+
   const handleFilterChange = (newFilter: FilterType) => {
     if (filter === newFilter) return;
     setFilter(newFilter);
@@ -220,7 +236,7 @@ export default function FeedScreen() {
           data={posts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
-            <PostCard post={item} onLike={handleLike} />
+            <PostCard post={item} onPress={handlePostPress} onLike={handleLike} />
           )}
           contentContainerStyle={styles.listContent}
           refreshControl={
@@ -248,6 +264,13 @@ export default function FeedScreen() {
         visible={showMoodModal}
         onClose={() => setShowMoodModal(false)}
         onSubmit={handleMoodSubmit}
+      />
+
+      {/* 게시물 상세 Bottom Sheet */}
+      <PostDetailSheet
+        ref={bottomSheetRef}
+        postId={selectedPostId}
+        onClose={handleSheetClose}
       />
     </View>
   );

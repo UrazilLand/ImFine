@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
 CREATE TABLE IF NOT EXISTS public.mood_entries (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  mood_tag TEXT NOT NULL CHECK (mood_tag IN ('VERY_HAPPY', 'HAPPY', 'NEUTRAL', 'SAD', 'VERY_SAD')),
+  mood_tag TEXT NOT NULL CHECK (mood_tag IN ('HAPPY', 'EXCITED', 'PEACEFUL', 'GRATEFUL', 'TIRED', 'SAD', 'ANGRY', 'ANNOYED', 'ANXIOUS', 'LONELY')),
   diary TEXT,
   is_shared BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -30,7 +30,7 @@ CREATE TABLE IF NOT EXISTS public.mood_entries (
 CREATE TABLE IF NOT EXISTS public.feed_posts (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
-  mood_tag TEXT NOT NULL CHECK (mood_tag IN ('VERY_HAPPY', 'HAPPY', 'NEUTRAL', 'SAD', 'VERY_SAD')),
+  mood_tag TEXT NOT NULL CHECK (mood_tag IN ('HAPPY', 'EXCITED', 'PEACEFUL', 'GRATEFUL', 'TIRED', 'SAD', 'ANGRY', 'ANNOYED', 'ANXIOUS', 'LONELY')),
   content TEXT NOT NULL,
   is_shared BOOLEAN DEFAULT TRUE,
   like_count INTEGER DEFAULT 0,
@@ -77,6 +77,24 @@ CREATE TABLE IF NOT EXISTS public.point_transactions (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 7. 좋아요 테이블 (활동 기반 추천용)
+CREATE TABLE IF NOT EXISTS public.post_likes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID REFERENCES public.feed_posts(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(post_id, user_id)
+);
+
+-- 8. 조회 기록 테이블 (클릭 기반 추천용)
+CREATE TABLE IF NOT EXISTS public.post_views (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  post_id UUID REFERENCES public.feed_posts(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  view_duration_ms INTEGER DEFAULT 0,  -- 체류 시간 (밀리초)
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_mood_entries_user_id ON public.mood_entries(user_id);
 CREATE INDEX IF NOT EXISTS idx_mood_entries_created_at ON public.mood_entries(created_at DESC);
@@ -85,6 +103,11 @@ CREATE INDEX IF NOT EXISTS idx_feed_posts_created_at ON public.feed_posts(create
 CREATE INDEX IF NOT EXISTS idx_comments_post_id ON public.comments(post_id);
 CREATE INDEX IF NOT EXISTS idx_heart_box_user_id ON public.heart_box_messages(user_id);
 CREATE INDEX IF NOT EXISTS idx_point_transactions_user_id ON public.point_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_post_likes_user_id ON public.post_likes(user_id);
+CREATE INDEX IF NOT EXISTS idx_post_likes_post_id ON public.post_likes(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_views_user_id ON public.post_views(user_id);
+CREATE INDEX IF NOT EXISTS idx_post_views_post_id ON public.post_views(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_views_created_at ON public.post_views(created_at DESC);
 
 -- RLS (Row Level Security) 정책 설정
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -129,3 +152,54 @@ DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- 좋아요 카운트 증가 함수
+CREATE OR REPLACE FUNCTION public.increment_like_count(target_post_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.feed_posts
+  SET like_count = COALESCE(like_count, 0) + 1
+  WHERE id = target_post_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 좋아요 카운트 감소 함수
+CREATE OR REPLACE FUNCTION public.decrement_like_count(target_post_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.feed_posts
+  SET like_count = GREATEST(COALESCE(like_count, 0) - 1, 0)
+  WHERE id = target_post_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 댓글 카운트 증가 함수
+CREATE OR REPLACE FUNCTION public.increment_comment_count(target_post_id UUID)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.feed_posts
+  SET comment_count = COALESCE(comment_count, 0) + 1
+  WHERE id = target_post_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- post_likes RLS 정책
+ALTER TABLE public.post_likes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view likes" ON public.post_likes FOR SELECT USING (true);
+CREATE POLICY "Users can insert own likes" ON public.post_likes FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own likes" ON public.post_likes FOR DELETE USING (auth.uid() = user_id);
+
+-- 포인트 증가 함수 (profiles 테이블 업데이트용)
+CREATE OR REPLACE FUNCTION public.increment_points(user_id UUID, amount INTEGER)
+RETURNS VOID AS $$
+BEGIN
+  UPDATE public.profiles
+  SET points = COALESCE(points, 0) + amount
+  WHERE id = user_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- post_views RLS 정책
+ALTER TABLE public.post_views ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users can view own views" ON public.post_views FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own views" ON public.post_views FOR INSERT WITH CHECK (auth.uid() = user_id);

@@ -1,8 +1,9 @@
 import { brand } from '@/constants/Colors';
 import { useAuth } from '@/contexts/AuthContext';
+import { getPoints } from '@/lib/pointService';
 import { FontAwesome } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ScrollView,
   StyleSheet,
@@ -20,6 +21,18 @@ import {
 export default function MyPageScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
+  const [points, setPoints] = useState<number>(0);
+
+  useEffect(() => {
+    if (user) {
+      loadPoints();
+    }
+  }, [user]);
+
+  const loadPoints = async () => {
+    const pts = await getPoints();
+    setPoints(pts);
+  };
 
   const handleLogin = () => {
     router.push('/(auth)/login');
@@ -62,9 +75,9 @@ export default function MyPageScreen() {
       </View>
 
       {/* 포인트 섹션 */}
-      <View style={styles.pointSection}>
+      <TouchableOpacity style={styles.pointSection} onPress={() => router.push('/mypage/points')}>
         <Text style={styles.pointLabel}>나의 마음 포인트</Text>
-        <Text style={styles.pointValue}>100 P</Text>
+        <Text style={styles.pointValue}>{points.toLocaleString()} P</Text>
         <View style={styles.pointButtons}>
           <TouchableOpacity style={styles.pointButton}>
             <Text style={styles.pointButtonText}>충전</Text>
@@ -73,11 +86,11 @@ export default function MyPageScreen() {
             <Text style={styles.pointButtonText}>환전</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </TouchableOpacity>
 
       {/* 메뉴 리스트 */}
       <View style={styles.menuSection}>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => router.push('/heartbox')}>
           <FontAwesome name="heart" size={20} color={brand.orange} />
           <Text style={styles.menuText}>마음 보관함</Text>
           <FontAwesome name="chevron-right" size={16} color="#666" />

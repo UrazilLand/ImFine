@@ -1,7 +1,6 @@
 import { brand } from '@/constants/Colors';
 import type { Post } from '@/lib/feedService';
 import { FontAwesome } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
 import React from 'react';
 import {
     StyleSheet,
@@ -26,17 +25,18 @@ const MOOD_EMOJI: Record<string, string> = {
 
 interface PostCardProps {
     post: Post;
+    onPress?: (postId: string) => void;
     onLike?: (postId: string) => void;
 }
 
 /**
  * 피드 카드 컴포넌트
  */
-export default function PostCard({ post, onLike }: PostCardProps) {
-    const router = useRouter();
-
+export default function PostCard({ post, onPress, onLike }: PostCardProps) {
     const handlePress = () => {
-        router.push(`/post/${post.id}`);
+        if (onPress) {
+            onPress(post.id);
+        }
     };
 
     const handleLike = () => {
